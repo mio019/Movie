@@ -1,0 +1,187 @@
+<!DOCTYPE html>
+<html lang="zh">
+<head>
+  <meta charset="UTF-8">
+  <title>电影详情 · CineRec</title>
+  <link rel="stylesheet" href="/static/css/main.css">
+  <style>
+    .detail-hero {
+      display: grid; grid-template-columns: 240px 1fr;
+      gap: 40px; margin-bottom: 48px;
+    }
+    .poster-box {
+      aspect-ratio: 2/3; background: var(--bg2);
+      border: 1px solid var(--border); border-radius: var(--radius);
+      display: flex; align-items: center; justify-content: center;
+      font-size: 80px; color: var(--text2);
+    }
+    .detail-title {
+      font-family: 'Cinzel', serif; font-size: 32px;
+      color: var(--accent); margin-bottom: 12px;
+    }
+    .detail-meta { display: flex; gap: 16px; flex-wrap: wrap; margin-bottom: 20px; }
+    .detail-meta span { font-size: 13px; color: var(--text2); }
+    .rate-section { margin: 32px 0; }
+    .rate-label { font-size: 13px; color: var(--text2); margin-bottom: 12px; }
+    .comment-item {
+      padding: 16px 0; border-bottom: 1px solid var(--border);
+    }
+    .comment-user { font-size: 12px; color: var(--accent); margin-bottom: 6px; }
+    .comment-text { font-size: 14px; color: var(--text); }
+    .comment-time { font-size: 11px; color: var(--text2); margin-top: 4px; }
+    .fav-btn { margin-left: 12px; }
+  </style>
+</head>
+<body>
+<nav class="nav">
+  <div class="nav-brand">CINEREC</div>
+  <a href="/">首页</a>
+  <a href="/movies">电影</a>
+  <a href="/recommend">推荐</a>
+  <div class="nav-user">
+    <span id="nav-username"></span>
+    <span class="logout-btn" onclick="logout()">退出</span>
+  </div>
+</nav>
+
+<div class="main">
+  <div class="container" style="padding-bottom:60px">
+    <div id="detail-wrap">
+      <div class="loading"><div class="spinner"></div> 加载中...</div>
+    </div>
+  </div>
+</div>
+
+<script src="/static/js/main.js"></script>
+<script>
+const MOVIE_ID = parseInt("{{ movie_id }}");
+
+async function init() {
+  // 先获取电影数据和登录状态，并行请求
+  const [profileRes, detRes] = await Promise.all([
+    API.get('/api/user/profile'),
+    API.get(`/api/movie/detail/${MOVIE_ID}`)
+  ]);
+
+  // 未登录跳转
+  if (profileRes.code !== 200) {
+    location.href = '/login';
+    return;
+  }
+  document.getElementById('nav-username').textContent = profileRes.data.username;
+
+  // 电影数据加载失败
+  if (detRes.code !== 200) {
+    document.getElementById('detail-wrap').innerHTML =
+      '<div class="empty"><div class="empty-icon">🎬</div>电影不存在</div>';
+    return;
+  }
+  const m = detRes.data;
+  document.title = `${m.title} · CineRec`;
+
+  // 封面 HTML
+  const posterHTML = (m.poster_url && !m.poster_url.startsWith('/static'))
+    ? `<img src="${m.poster_url}" alt="${m.title}"
+            style="width:100%;height:100%;object-fit:cover;border-radius:var(--radius)"
+            onerror="this.outerHTML='<span style=font-size:80px>🎬</span>'">`
+    : '🎬';
+
+  // 渲染主内容
+  document.getElementById('detail-wrap').innerHTML = `
+    <div class="detail-hero fade-in">
+      <div class="poster-box">${posterHTML}</div>
+      <div>
+        <div class="detail-title">${m.title}</div>
+        <div class="detail-meta">
+          <span>📅 ${m.year || '未知年份'}</span>
+          <span>🎭 ${m.genres || '未分类'}</span>
+          <span>★ ${m.avg_rating} (${m.rating_count} 人评分)</span>
+        </div>
+        <div style="display:flex;align-items:center;gap:8px;margin-bottom:20px">
+          <button class="btn btn-primary" onclick="addFav()">♥ 收藏</button>
+          <button class="btn btn-ghost" onclick="location.href='/recommend'">获取推荐</button>
+        </div>
+        <p style="color:var(--text2);font-size:14px;line-height:1.8">
+          ${m.description || '暂无简介'}
+        </p>
+        <div class="rate-section">
+          <div class="rate-label">为这部电影评分</div>
+          <div class="stars" id="star-row">
+            ${'<span class="star">★</span>'.repeat(5)}
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div id="similar-section"></div>
+
+    <div style="font-size:13px;letter-spacing:3px;color:var(--text2);
+                margin-bottom:20px;display:flex;align-items:center;gap:12px">
+      评论区
+      <span style="flex:1;height:1px;background:var(--border);display:block"></span>
+    </div>
+    <div style="margin-bottom:24px">
+      <textarea id="comment-input" class="form-control" rows="3"
+        placeholder="写下你的想法..." style="resize:none"></textarea>
+      <button class="btn btn-primary" style="margin-top:12px" onclick="submitComment()">
+        发表评论
+      </button>
+    </div>
+    <div id="comment-list">
+      ${m.comments.length ? m.comments.map(c => `
+        <div class="comment-item">
+          <div class="comment-user">用户 ${c.user_id}</div>
+          <div class="comment-text">${c.content}</div>
+          <div class="comment-time">${c.time}</div>
+        </div>`).join('')
+      : '<div class="empty">暂无评论，来发表第一条吧</div>'}
+    </div>
+  `;
+
+  // 初始化星星评分
+  initStars(document.getElementById('star-row'), async (score) => {
+    const r = await API.post('/api/user/rate', { movie_id: MOVIE_ID, rating: score });
+    toast(r.code === 200 ? `评分 ${score} 星成功` : r.msg,
+          r.code === 200 ? 'success' : 'error');
+  });
+
+  // 异步加载相似电影，不阻塞主内容
+  loadSimilar();
+}
+
+async function loadSimilar() {
+  const simRes = await API.get(`/api/movie/similar/${MOVIE_ID}?top_n=5`);
+  if (simRes.code !== 200 || !simRes.data.length) return;
+  document.getElementById('similar-section').innerHTML = `
+    <div style="font-size:13px;letter-spacing:3px;color:var(--text2);
+                margin:32px 0 20px;display:flex;align-items:center;gap:12px">
+      相似电影
+      <span style="flex:1;height:1px;background:var(--border);display:block"></span>
+    </div>
+    <div class="grid-movies" style="margin-bottom:40px">
+      ${simRes.data.map(movieCardHTML).join('')}
+    </div>`;
+}
+
+async function addFav() {
+  const r = await API.post('/api/user/favorite', { movie_id: MOVIE_ID });
+  toast(r.msg, r.code === 200 ? 'success' : 'error');
+}
+
+async function submitComment() {
+  const content = document.getElementById('comment-input').value.trim();
+  if (!content) return toast('评论不能为空', 'error');
+  const r = await API.post('/api/user/comment', { movie_id: MOVIE_ID, content });
+  if (r.code === 200) {
+    toast('评论成功');
+    document.getElementById('comment-input').value = '';
+    setTimeout(() => location.reload(), 800);
+  } else {
+    toast(r.msg, 'error');
+  }
+}
+
+init();
+</script>
+</body>
+</html>

@@ -1,0 +1,119 @@
+<!DOCTYPE html>
+<html lang="zh">
+<head>
+  <meta charset="UTF-8">
+  <title>电影管理 · Admin</title>
+  <link rel="stylesheet" href="/static/css/main.css">
+  <style>
+    .admin-layout{display:flex;min-height:100vh}
+    .sidebar{width:220px;position:fixed;left:0;top:0;bottom:0;background:var(--bg2);border-right:1px solid var(--border);padding-top:24px;z-index:100}
+    .sidebar-brand{font-family:'Cinzel',serif;color:var(--accent);font-size:14px;letter-spacing:2px;padding:0 24px 24px;border-bottom:1px solid var(--border)}
+    .sidebar-brand span{display:block;font-size:10px;color:var(--text2);margin-top:2px}
+    .sidebar-link{display:block;padding:12px 24px;font-size:13px;color:var(--text2);transition:all .2s;cursor:pointer}
+    .sidebar-link:hover,.sidebar-link.active{color:var(--accent);background:rgba(226,185,111,0.06);border-left:2px solid var(--accent)}
+    .admin-main{margin-left:220px;padding:40px;flex:1}
+    .modal-overlay{position:fixed;inset:0;background:rgba(0,0,0,0.6);display:flex;align-items:center;justify-content:center;z-index:200}
+    .modal-box{width:500px;background:var(--bg2);border:1px solid var(--border);border-radius:16px;padding:32px}
+    .modal-title{font-size:16px;color:var(--accent);margin-bottom:24px;letter-spacing:1px}
+  </style>
+</head>
+<body>
+<div class="admin-layout">
+  <div class="sidebar">
+    <div class="sidebar-brand">CINEREC<span>ADMIN PANEL</span></div>
+    <div style="padding:16px 0">
+      <a class="sidebar-link" href="/admin">📊 数据大屏</a>
+      <a class="sidebar-link" href="/admin/users">👥 用户管理</a>
+      <a class="sidebar-link active" href="/admin/movies">🎬 电影管理</a>
+      <a class="sidebar-link" href="/admin/comments">💬 评论管理</a>
+    </div>
+  </div>
+  <div class="admin-main">
+    <div style="font-family:'Cinzel',serif;font-size:22px;color:var(--accent);letter-spacing:3px;margin-bottom:32px">MOVIE MANAGEMENT</div>
+    <div style="display:flex;gap:12px;margin-bottom:24px">
+      <div class="search-wrap" style="max-width:360px;flex:1">
+        <span style="color:var(--text2)">🔍</span>
+        <input id="kw" placeholder="搜索电影标题..." onkeydown="if(event.key==='Enter')doSearch()">
+      </div>
+      <button class="btn btn-primary" onclick="doSearch()">搜索</button>
+    </div>
+    <div class="table-wrap">
+      <table>
+        <thead><tr><th>ID</th><th>标题</th><th>类型</th><th>年份</th><th>均分</th><th>评分数</th><th>操作</th></tr></thead>
+        <tbody id="movie-tbody"></tbody>
+      </table>
+    </div>
+    <div id="pagination" class="pagination"></div>
+  </div>
+</div>
+
+<!-- 编辑弹窗 -->
+<div id="edit-modal" class="modal-overlay" style="display:none">
+  <div class="modal-box">
+    <div class="modal-title">编辑电影信息</div>
+    <input type="hidden" id="edit-id">
+    <div class="form-group"><label>标题</label><input id="edit-title" class="form-control"></div>
+    <div class="form-group"><label>类型（用|分隔）</label><input id="edit-genres" class="form-control"></div>
+    <div class="form-group"><label>年份</label><input id="edit-year" class="form-control" type="number"></div>
+    <div class="form-group"><label>导演</label><input id="edit-director" class="form-control"></div>
+    <div style="display:flex;gap:12px;justify-content:flex-end;margin-top:8px">
+      <button class="btn btn-ghost" onclick="closeModal()">取消</button>
+      <button class="btn btn-primary" onclick="saveMovie()">保存</button>
+    </div>
+  </div>
+</div>
+
+<script src="/static/js/main.js"></script>
+<script>
+let page=1, kw='';
+async function load() {
+  const res = await API.get(`/api/admin/movies?page=${page}&per_page=20&keyword=${encodeURIComponent(kw)}`);
+  if (res.code !== 200) { location.href='/admin'; return; }
+  document.getElementById('movie-tbody').innerHTML = res.data.list.map(m => `
+    <tr>
+      <td style="color:var(--text2)">${m.movie_id}</td>
+      <td style="color:var(--accent2)">${m.title}</td>
+      <td><span class="badge badge-genre">${(m.genres||'').split('|')[0]}</span></td>
+      <td style="color:var(--text2)">${m.year||'-'}</td>
+      <td style="color:var(--accent)">★ ${m.avg_rating}</td>
+      <td style="color:var(--text2)">${m.rating_count}</td>
+      <td style="display:flex;gap:8px">
+        <button class="btn btn-ghost" style="padding:4px 12px;font-size:12px"
+          onclick='openEdit(${JSON.stringify(m)})'>编辑</button>
+        <button class="btn btn-danger" style="padding:4px 12px;font-size:12px"
+          onclick="delMovie(${m.movie_id})">删除</button>
+      </td>
+    </tr>`).join('');
+  renderPagination(document.getElementById('pagination'), page, res.data.pages, p=>{page=p;load();});
+}
+function doSearch(){ kw=document.getElementById('kw').value.trim(); page=1; load(); }
+function openEdit(m) {
+  document.getElementById('edit-id').value      = m.movie_id;
+  document.getElementById('edit-title').value   = m.title;
+  document.getElementById('edit-genres').value  = m.genres||'';
+  document.getElementById('edit-year').value    = m.year||'';
+  document.getElementById('edit-director').value= '';
+  document.getElementById('edit-modal').style.display='flex';
+}
+function closeModal(){ document.getElementById('edit-modal').style.display='none'; }
+async function saveMovie() {
+  const id = document.getElementById('edit-id').value;
+  const r = await API.put(`/api/admin/movies/${id}`, {
+    title:    document.getElementById('edit-title').value,
+    genres:   document.getElementById('edit-genres').value,
+    year:     parseInt(document.getElementById('edit-year').value)||null,
+    director: document.getElementById('edit-director').value,
+  });
+  toast(r.msg, r.code===200?'success':'error');
+  if(r.code===200){ closeModal(); load(); }
+}
+async function delMovie(id) {
+  if(!confirm('确认删除该电影？')) return;
+  const r = await API.delete(`/api/admin/movies/${id}`);
+  toast(r.msg, r.code===200?'success':'error');
+  if(r.code===200) load();
+}
+load();
+</script>
+</body>
+</html>

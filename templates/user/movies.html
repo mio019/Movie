@@ -1,0 +1,122 @@
+<!DOCTYPE html>
+<html lang="zh">
+<head>
+  <meta charset="UTF-8">
+  <title>电影列表 · CineRec</title>
+  <link rel="stylesheet" href="/static/css/main.css">
+  <style>
+    .filter-bar {
+      display: flex; gap: 12px; align-items: center;
+      flex-wrap: wrap; margin-bottom: 32px;
+    }
+    .genre-tag {
+      padding: 6px 16px; border-radius: 20px;
+      border: 1px solid var(--border);
+      font-size: 12px; color: var(--text2);
+      cursor: pointer; transition: all .2s;
+    }
+    .genre-tag:hover, .genre-tag.active {
+      border-color: var(--accent); color: var(--accent);
+      background: rgba(226,185,111,0.08);
+    }
+  </style>
+</head>
+<body>
+<nav class="nav">
+  <div class="nav-brand">CINEREC</div>
+  <a href="/">首页</a>
+  <a href="/movies" class="active">电影</a>
+  <a href="/recommend">推荐</a>
+  <div class="nav-user">
+    <span id="nav-username"></span>
+    <span class="logout-btn" onclick="logout()">退出</span>
+  </div>
+</nav>
+
+<div class="main">
+  <div class="container" style="padding-bottom:60px">
+    <div style="margin-bottom:32px;display:flex;gap:16px;align-items:center">
+      <div class="search-wrap" style="flex:1;max-width:400px">
+        <span style="color:var(--text2)">🔍</span>
+        <input id="search" placeholder="搜索电影..." onkeydown="if(event.key==='Enter')doSearch()">
+      </div>
+      <button class="btn btn-primary" onclick="doSearch()">搜索</button>
+    </div>
+
+    <div id="genre-bar" class="filter-bar"></div>
+    <div id="movie-grid" class="grid-movies">
+      <div class="loading"><div class="spinner"></div></div>
+    </div>
+    <div id="pagination" class="pagination"></div>
+  </div>
+</div>
+
+<script src="/static/js/main.js"></script>
+<script>
+let currentPage = 1, currentKeyword = '', currentGenre = '';
+
+// 读取 URL 参数
+const params = new URLSearchParams(location.search);
+if (params.get('keyword')) {
+  currentKeyword = params.get('keyword');
+}
+
+async function init() {
+  const user = await checkLogin();
+  if (!user) return;
+  document.getElementById('nav-username').textContent = user.username;
+  document.getElementById('search').value = currentKeyword;
+
+  // 加载类型
+  const gr = await API.get('/api/movie/genres');
+  if (gr.code === 200) {
+    const bar = document.getElementById('genre-bar');
+    const all = document.createElement('span');
+    all.className = 'genre-tag active';
+    all.textContent = '全部';
+    all.onclick = () => filterGenre('', all);
+    bar.appendChild(all);
+    gr.data.forEach(g => {
+      const tag = document.createElement('span');
+      tag.className = 'genre-tag';
+      tag.textContent = g;
+      tag.onclick = () => filterGenre(g, tag);
+      bar.appendChild(tag);
+    });
+  }
+  loadMovies();
+}
+
+function filterGenre(genre, el) {
+  currentGenre = genre; currentPage = 1;
+  document.querySelectorAll('.genre-tag').forEach(t => t.classList.remove('active'));
+  el.classList.add('active');
+  loadMovies();
+}
+
+function doSearch() {
+  currentKeyword = document.getElementById('search').value.trim();
+  currentPage = 1; loadMovies();
+}
+
+async function loadMovies() {
+  const grid = document.getElementById('movie-grid');
+  grid.innerHTML = '<div class="loading"><div class="spinner"></div></div>';
+  let url = `/api/movie/list?page=${currentPage}&per_page=20`;
+  if (currentKeyword) url += `&keyword=${encodeURIComponent(currentKeyword)}`;
+  if (currentGenre)   url += `&genre=${encodeURIComponent(currentGenre)}`;
+  const res = await API.get(url);
+  if (res.code !== 200) return;
+  grid.innerHTML = res.data.list.length
+    ? res.data.list.map(movieCardHTML).join('')
+    : '<div class="empty"><div class="empty-icon">🎬</div>没有找到相关电影</div>';
+  renderPagination(
+    document.getElementById('pagination'),
+    currentPage, res.data.pages,
+    p => { currentPage = p; loadMovies(); window.scrollTo(0,0); }
+  );
+}
+init();
+</script>
+</body>
+</html>

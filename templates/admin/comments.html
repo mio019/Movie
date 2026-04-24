@@ -1,0 +1,68 @@
+<!DOCTYPE html>
+<html lang="zh">
+<head>
+  <meta charset="UTF-8">
+  <title>评论管理 · Admin</title>
+  <link rel="stylesheet" href="/static/css/main.css">
+  <style>
+    .admin-layout{display:flex;min-height:100vh}
+    .sidebar{width:220px;position:fixed;left:0;top:0;bottom:0;background:var(--bg2);border-right:1px solid var(--border);padding-top:24px;z-index:100}
+    .sidebar-brand{font-family:'Cinzel',serif;color:var(--accent);font-size:14px;letter-spacing:2px;padding:0 24px 24px;border-bottom:1px solid var(--border)}
+    .sidebar-brand span{display:block;font-size:10px;color:var(--text2);margin-top:2px}
+    .sidebar-link{display:block;padding:12px 24px;font-size:13px;color:var(--text2);transition:all .2s;cursor:pointer}
+    .sidebar-link:hover,.sidebar-link.active{color:var(--accent);background:rgba(226,185,111,0.06);border-left:2px solid var(--accent)}
+    .admin-main{margin-left:220px;padding:40px;flex:1}
+  </style>
+</head>
+<body>
+<div class="admin-layout">
+  <div class="sidebar">
+    <div class="sidebar-brand">CINEREC<span>ADMIN PANEL</span></div>
+    <div style="padding:16px 0">
+      <a class="sidebar-link" href="/admin">📊 数据大屏</a>
+      <a class="sidebar-link" href="/admin/users">👥 用户管理</a>
+      <a class="sidebar-link" href="/admin/movies">🎬 电影管理</a>
+      <a class="sidebar-link active" href="/admin/comments">💬 评论管理</a>
+    </div>
+  </div>
+  <div class="admin-main">
+    <div style="font-family:'Cinzel',serif;font-size:22px;color:var(--accent);letter-spacing:3px;margin-bottom:32px">COMMENT MANAGEMENT</div>
+    <div class="table-wrap">
+      <table>
+        <thead><tr><th>ID</th><th>用户ID</th><th>电影ID</th><th>内容</th><th>状态</th><th>时间</th><th>操作</th></tr></thead>
+        <tbody id="comment-tbody"></tbody>
+      </table>
+    </div>
+    <div id="pagination" class="pagination"></div>
+  </div>
+</div>
+<script src="/static/js/main.js"></script>
+<script>
+let page=1;
+async function load() {
+  const res = await API.get(`/api/admin/comments?page=${page}&per_page=20`);
+  if (res.code !== 200) { location.href='/admin'; return; }
+  document.getElementById('comment-tbody').innerHTML = res.data.list.map(c => `
+    <tr>
+      <td style="color:var(--text2)">${c.comment_id}</td>
+      <td style="color:var(--accent2)">${c.user_id}</td>
+      <td><a href="/movie/${c.movie_id}" style="color:var(--accent2)">${c.movie_id}</a></td>
+      <td style="max-width:320px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${c.content}</td>
+      <td><span style="color:${c.is_visible?'var(--green)':'var(--red)'}">${c.is_visible?'显示':'已隐藏'}</span></td>
+      <td style="color:var(--text2);font-size:12px">${c.created_at}</td>
+      <td>
+        ${c.is_visible ? `<button class="btn btn-danger" style="padding:4px 12px;font-size:12px"
+          onclick="hideComment(${c.comment_id})">隐藏</button>` : '<span style="color:var(--text2);font-size:12px">已处理</span>'}
+      </td>
+    </tr>`).join('');
+  renderPagination(document.getElementById('pagination'), page, res.data.pages, p=>{page=p;load();});
+}
+async function hideComment(id) {
+  const r = await API.delete(`/api/admin/comments/${id}`);
+  toast(r.msg, r.code===200?'success':'error');
+  if(r.code===200) load();
+}
+load();
+</script>
+</body>
+</html>

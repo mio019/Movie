@@ -1,0 +1,104 @@
+<!DOCTYPE html>
+<html lang="zh">
+<head>
+  <meta charset="UTF-8">
+  <title>首页 · CineRec</title>
+  <link rel="stylesheet" href="/static/css/main.css">
+  <style>
+    .hero {
+      height: 420px;
+      display: flex; flex-direction: column;
+      align-items: center; justify-content: center;
+      text-align: center;
+      background: radial-gradient(ellipse 80% 60% at 50% 0%,
+        rgba(226,185,111,0.12) 0%, transparent 70%);
+      position: relative;
+    }
+    .hero-title {
+      font-family: 'Cinzel', serif;
+      font-size: 56px; color: var(--accent);
+      letter-spacing: 8px; margin-bottom: 16px;
+    }
+    .hero-sub { color: var(--text2); font-size: 16px; margin-bottom: 40px; }
+    .hero-search { width: 520px; }
+    .section-title {
+      font-size: 13px; letter-spacing: 3px;
+      color: var(--text2); margin-bottom: 24px;
+      display: flex; align-items: center; gap: 12px;
+    }
+    .section-title::after {
+      content: ''; flex: 1; height: 1px; background: var(--border);
+    }
+  </style>
+</head>
+<body>
+<nav class="nav">
+  <div class="nav-brand">CINEREC</div>
+  <a href="/" class="active">首页</a>
+  <a href="/movies">电影</a>
+  <a href="/recommend">推荐</a>
+  <div class="nav-user">
+    <span id="nav-username">加载中...</span>
+    <span class="logout-btn" onclick="logout()">退出</span>
+  </div>
+</nav>
+
+<div class="main">
+  <div class="hero">
+    <div class="hero-title">CINEREC</div>
+    <div class="hero-sub">基于协同过滤的智能电影推荐系统</div>
+    <div class="hero-search search-wrap">
+      <span style="color:var(--text2)">🔍</span>
+      <input id="search-input" placeholder="搜索电影标题..." onkeydown="if(event.key==='Enter')goSearch()">
+      <button class="btn btn-primary" style="padding:8px 20px" onclick="goSearch()">搜索</button>
+    </div>
+  </div>
+
+  <div class="container" style="padding-bottom:60px">
+    <!-- 热门电影 -->
+    <div class="section-title">热门电影</div>
+    <div id="hot-movies" class="grid-movies">
+      <div class="loading"><div class="spinner"></div> 加载中...</div>
+    </div>
+
+    <div style="margin-top:48px"></div>
+
+    <!-- 个性化推荐 -->
+    <div class="section-title">为你推荐</div>
+    <div id="rec-movies" class="grid-movies">
+      <div class="loading"><div class="spinner"></div> 加载中...</div>
+    </div>
+  </div>
+</div>
+
+<script src="/static/js/main.js"></script>
+<script>
+function goSearch() {
+  const kw = document.getElementById('search-input').value.trim();
+  if (kw) location.href = `/movies?keyword=${encodeURIComponent(kw)}`;
+}
+
+async function init() {
+  // 检查登录
+  const user = await checkLogin();
+  if (!user) return;
+  document.getElementById('nav-username').textContent = user.username;
+
+  // 加载热门
+  const hotRes = await API.get('/api/movie/hot?top_n=8');
+  const hotEl = document.getElementById('hot-movies');
+  if (hotRes.code === 200 && hotRes.data.length) {
+    hotEl.innerHTML = hotRes.data.map(movieCardHTML).join('');
+  } else { hotEl.innerHTML = '<div class="empty">暂无数据</div>'; }
+
+  // 加载推荐
+  const recRes = await API.get('/api/user/recommend?algo=hybrid&top_n=8');
+  const recEl = document.getElementById('rec-movies');
+  if (recRes.code === 200 && recRes.data.length) {
+    recEl.innerHTML = recRes.data.map(movieCardHTML).join('');
+  } else { recEl.innerHTML = '<div class="empty">暂无推荐</div>'; }
+}
+init();
+</script>
+</body>
+</html>

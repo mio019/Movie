@@ -1,0 +1,84 @@
+<!DOCTYPE html>
+<html lang="zh">
+<head>
+  <meta charset="UTF-8">
+  <title>用户管理 · Admin</title>
+  <link rel="stylesheet" href="/static/css/main.css">
+  <style>
+    .admin-layout{display:flex;min-height:100vh}
+    .sidebar{width:220px;position:fixed;left:0;top:0;bottom:0;background:var(--bg2);border-right:1px solid var(--border);padding-top:24px;z-index:100}
+    .sidebar-brand{font-family:'Cinzel',serif;color:var(--accent);font-size:14px;letter-spacing:2px;padding:0 24px 24px;border-bottom:1px solid var(--border)}
+    .sidebar-brand span{display:block;font-size:10px;color:var(--text2);margin-top:2px}
+    .sidebar-link{display:block;padding:12px 24px;font-size:13px;color:var(--text2);transition:all .2s;cursor:pointer}
+    .sidebar-link:hover,.sidebar-link.active{color:var(--accent);background:rgba(226,185,111,0.06);border-left:2px solid var(--accent)}
+    .admin-main{margin-left:220px;padding:40px;flex:1}
+    .status-dot{width:8px;height:8px;border-radius:50%;display:inline-block;margin-right:6px}
+  </style>
+</head>
+<body>
+<div class="admin-layout">
+  <div class="sidebar">
+    <div class="sidebar-brand">CINEREC<span>ADMIN PANEL</span></div>
+    <div style="padding:16px 0">
+      <a class="sidebar-link" href="/admin">📊 数据大屏</a>
+      <a class="sidebar-link active" href="/admin/users">👥 用户管理</a>
+      <a class="sidebar-link" href="/admin/movies">🎬 电影管理</a>
+      <a class="sidebar-link" href="/admin/comments">💬 评论管理</a>
+    </div>
+  </div>
+  <div class="admin-main">
+    <div style="font-family:'Cinzel',serif;font-size:22px;color:var(--accent);letter-spacing:3px;margin-bottom:32px">USER MANAGEMENT</div>
+    <div style="display:flex;gap:12px;margin-bottom:24px">
+      <div class="search-wrap" style="max-width:360px;flex:1">
+        <span style="color:var(--text2)">🔍</span>
+        <input id="kw" placeholder="搜索用户名或邮箱..." onkeydown="if(event.key==='Enter')doSearch()">
+      </div>
+      <button class="btn btn-primary" onclick="doSearch()">搜索</button>
+    </div>
+    <div class="table-wrap">
+      <table>
+        <thead><tr><th>ID</th><th>用户名</th><th>邮箱</th><th>性别</th><th>职业</th><th>状态</th><th>注册时间</th><th>操作</th></tr></thead>
+        <tbody id="user-tbody"></tbody>
+      </table>
+    </div>
+    <div id="pagination" class="pagination"></div>
+  </div>
+</div>
+<script src="/static/js/main.js"></script>
+<script>
+let page = 1, kw = '';
+async function load() {
+  const res = await API.get(`/api/admin/users?page=${page}&per_page=20&keyword=${encodeURIComponent(kw)}`);
+  if (res.code !== 200) { location.href='/admin'; return; }
+  const tbody = document.getElementById('user-tbody');
+  tbody.innerHTML = res.data.list.map(u => `
+    <tr>
+      <td style="color:var(--text2)">${u.user_id}</td>
+      <td style="color:var(--accent2)">${u.username}</td>
+      <td style="color:var(--text2)">${u.email}</td>
+      <td>${u.gender || '-'}</td>
+      <td>${u.occupation || '-'}</td>
+      <td>
+        <span class="status-dot" style="background:${u.is_active?'var(--green)':'var(--red)'}"></span>
+        ${u.is_active ? '正常' : '已禁用'}
+      </td>
+      <td style="color:var(--text2)">${u.created_at}</td>
+      <td>
+        <button class="btn ${u.is_active?'btn-danger':'btn-ghost'}" style="padding:4px 12px;font-size:12px"
+          onclick="toggle(${u.user_id}, this)">
+          ${u.is_active ? '禁用' : '启用'}
+        </button>
+      </td>
+    </tr>`).join('');
+  renderPagination(document.getElementById('pagination'), page, res.data.pages, p => { page=p; load(); });
+}
+async function toggle(uid, btn) {
+  const r = await API.put(`/api/admin/users/${uid}/toggle`);
+  toast(r.msg, r.code === 200 ? 'success' : 'error');
+  if (r.code === 200) load();
+}
+function doSearch() { kw = document.getElementById('kw').value.trim(); page=1; load(); }
+load();
+</script>
+</body>
+</html>

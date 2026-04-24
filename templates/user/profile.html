@@ -1,0 +1,159 @@
+<!DOCTYPE html>
+<html lang="zh">
+<head>
+  <meta charset="UTF-8">
+  <title>个人中心 · CineRec</title>
+  <link rel="stylesheet" href="/static/css/main.css">
+  <style>
+    .profile-grid { display:grid; grid-template-columns:280px 1fr; gap:32px; }
+    .profile-card { position:sticky; top:80px; }
+    .avatar-box {
+      width:80px; height:80px; border-radius:50%;
+      background:var(--bg3); border:2px solid var(--accent);
+      display:flex; align-items:center; justify-content:center;
+      font-size:36px; margin:0 auto 16px;
+    }
+    .profile-name { font-family:'Cinzel',serif; font-size:18px; color:var(--accent); text-align:center; margin-bottom:4px; }
+    .profile-email { font-size:12px; color:var(--text2); text-align:center; margin-bottom:24px; }
+    .tabs { display:flex; gap:0; border-bottom:1px solid var(--border); margin-bottom:24px; }
+    .tab {
+      padding:10px 20px; font-size:13px; color:var(--text2);
+      cursor:pointer; border-bottom:2px solid transparent;
+      transition:all .2s; margin-bottom:-1px;
+    }
+    .tab.active { color:var(--accent); border-bottom-color:var(--accent); }
+    .tab-content { display:none; }
+    .tab-content.active { display:block; }
+  </style>
+</head>
+<body>
+<nav class="nav">
+  <div class="nav-brand">CINEREC</div>
+  <a href="/">首页</a><a href="/movies">电影</a><a href="/recommend">推荐</a>
+  <div class="nav-user">
+    <span id="nav-username"></span>
+    <span class="logout-btn" onclick="logout()">退出</span>
+  </div>
+</nav>
+
+<div class="main">
+  <div class="container" style="padding-bottom:60px">
+    <div class="profile-grid fade-in">
+      <!-- 左侧信息 -->
+      <div class="profile-card card">
+        <div class="avatar-box">👤</div>
+        <div class="profile-name" id="p-name"></div>
+        <div class="profile-email" id="p-email"></div>
+        <div class="divider"></div>
+        <div class="form-group">
+          <label>年龄</label>
+          <input id="p-age" class="form-control" type="number">
+        </div>
+        <div class="form-group">
+          <label>性别</label>
+          <select id="p-gender" class="form-control">
+            <option value="">未填写</option>
+            <option value="M">男</option>
+            <option value="F">女</option>
+          </select>
+        </div>
+        <div class="form-group">
+          <label>职业</label>
+          <input id="p-occ" class="form-control">
+        </div>
+        <button class="btn btn-primary" style="width:100%" onclick="saveProfile()">保存信息</button>
+        <div class="divider"></div>
+        <div style="font-size:12px;color:var(--text2);letter-spacing:1px;margin-bottom:12px">修改密码</div>
+        <div class="form-group">
+          <input id="old-pwd" class="form-control" type="password" placeholder="原密码">
+        </div>
+        <div class="form-group">
+          <input id="new-pwd" class="form-control" type="password" placeholder="新密码（≥6位）">
+        </div>
+        <button class="btn btn-ghost" style="width:100%" onclick="changePwd()">修改密码</button>
+      </div>
+
+      <!-- 右侧标签页 -->
+      <div>
+        <div class="tabs">
+          <div class="tab active" onclick="switchTab('fav',this)">我的收藏</div>
+          <div class="tab"       onclick="switchTab('rated',this)">评分记录</div>
+        </div>
+        <div id="tab-fav"   class="tab-content active">
+          <div id="fav-list"   class="grid-movies"><div class="loading"><div class="spinner"></div></div></div>
+        </div>
+        <div id="tab-rated" class="tab-content">
+          <div id="rated-list"></div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script src="/static/js/main.js"></script>
+<script>
+async function init() {
+  const user = await checkLogin();
+  if (!user) return;
+  document.getElementById('nav-username').textContent = user.username;
+  document.getElementById('p-name').textContent  = user.username;
+  document.getElementById('p-email').textContent = user.email;
+  document.getElementById('p-age').value    = user.age || '';
+  document.getElementById('p-gender').value = user.gender || '';
+  document.getElementById('p-occ').value    = user.occupation || '';
+  loadFavorites();
+  loadRatings();
+}
+
+function switchTab(name, el) {
+  document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
+  document.querySelectorAll('.tab-content').forEach(t => t.classList.remove('active'));
+  el.classList.add('active');
+  document.getElementById(`tab-${name}`).classList.add('active');
+}
+
+async function loadFavorites() {
+  const res = await API.get('/api/user/favorites');
+  const el = document.getElementById('fav-list');
+  el.innerHTML = res.data && res.data.length
+    ? res.data.map(m => movieCardHTML(m)).join('')
+    : '<div class="empty"><div class="empty-icon">♥</div>还没有收藏</div>';
+}
+
+async function loadRatings() {
+  const res = await API.get('/api/user/my_ratings');
+  const el = document.getElementById('rated-list');
+  if (!res.data || !res.data.length) {
+    el.innerHTML = '<div class="empty"><div class="empty-icon">★</div>还没有评过分</div>'; return;
+  }
+  el.innerHTML = `<div class="table-wrap"><table>
+    <thead><tr><th>电影</th><th>评分</th><th>时间</th></tr></thead>
+    <tbody>${res.data.map(r => `
+      <tr>
+        <td><a href="/movie/${r.movie_id}" style="color:var(--accent2)">${r.title}</a></td>
+        <td><span style="color:var(--accent)">★ ${r.rating}</span></td>
+        <td style="color:var(--text2)">${r.time}</td>
+      </tr>`).join('')}
+    </tbody></table></div>`;
+}
+
+async function saveProfile() {
+  const r = await API.put('/api/user/profile', {
+    age:        parseInt(document.getElementById('p-age').value) || null,
+    gender:     document.getElementById('p-gender').value,
+    occupation: document.getElementById('p-occ').value.trim(),
+  });
+  toast(r.msg, r.code === 200 ? 'success' : 'error');
+}
+
+async function changePwd() {
+  const old_password = document.getElementById('old-pwd').value;
+  const new_password = document.getElementById('new-pwd').value;
+  if (!old_password || !new_password) return toast('请填写密码', 'error');
+  const r = await API.put('/api/user/password', { old_password, new_password });
+  toast(r.msg, r.code === 200 ? 'success' : 'error');
+}
+init();
+</script>
+</body>
+</html>

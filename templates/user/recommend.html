@@ -1,0 +1,115 @@
+<!DOCTYPE html>
+<html lang="zh">
+<head>
+  <meta charset="UTF-8">
+  <title>个性化推荐 · CineRec</title>
+  <link rel="stylesheet" href="/static/css/main.css">
+  <style>
+    .algo-tabs { display:flex; gap:8px; margin-bottom:32px; flex-wrap:wrap; }
+    .algo-tab {
+      padding:8px 20px; border-radius:20px;
+      border:1px solid var(--border); font-size:13px;
+      color:var(--text2); cursor:pointer; transition:all .2s;
+    }
+    .algo-tab:hover, .algo-tab.active {
+      border-color:var(--accent); color:var(--accent);
+      background:rgba(226,185,111,0.08);
+    }
+    .page-header { margin-bottom:32px; }
+    .page-header h1 { font-family:'Cinzel',serif; font-size:24px; color:var(--accent); margin-bottom:8px; }
+    .page-header p  { font-size:13px; color:var(--text2); }
+    .eval-card { margin-top:48px; }
+    .eval-table { width:100%; border-collapse:collapse; margin-top:16px; }
+    .eval-table th,.eval-table td { padding:12px 16px; text-align:left; border-bottom:1px solid var(--border); }
+    .eval-table th { font-size:12px; color:var(--text2); font-weight:400; letter-spacing:1px; }
+  </style>
+</head>
+<body>
+<nav class="nav">
+  <div class="nav-brand">CINEREC</div>
+  <a href="/">首页</a>
+  <a href="/movies">电影</a>
+  <a href="/recommend" class="active">推荐</a>
+  <div class="nav-user">
+    <span id="nav-username"></span>
+    <span class="logout-btn" onclick="logout()">退出</span>
+  </div>
+</nav>
+
+<div class="main">
+  <div class="container" style="padding-bottom:60px">
+    <div class="page-header fade-in">
+      <h1>RECOMMENDATION</h1>
+      <p>基于多种协同过滤算法的个性化推荐，切换算法对比推荐结果</p>
+    </div>
+
+    <div class="algo-tabs">
+      <span class="algo-tab active" data-algo="hybrid"  onclick="switchAlgo(this)">混合推荐</span>
+      <span class="algo-tab"        data-algo="user_cf" onclick="switchAlgo(this)">User-CF</span>
+      <span class="algo-tab"        data-algo="item_cf" onclick="switchAlgo(this)">Item-CF</span>
+      <span class="algo-tab"        data-algo="svd"     onclick="switchAlgo(this)">SVD</span>
+      <span class="algo-tab"        data-algo="content" onclick="switchAlgo(this)">内容过滤</span>
+    </div>
+
+    <div id="rec-grid" class="grid-movies">
+      <div class="loading"><div class="spinner"></div></div>
+    </div>
+
+    <!-- 算法评估 -->
+    <div class="eval-card card fade-in" style="margin-top:48px">
+      <div style="font-size:13px;letter-spacing:2px;color:var(--text2);margin-bottom:16px">算法性能对比</div>
+      <div id="eval-result">
+        <button class="btn btn-ghost" onclick="loadEval()">点击加载评估结果</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script src="/static/js/main.js"></script>
+<script>
+let currentAlgo = 'hybrid';
+
+async function init() {
+  const user = await checkLogin();
+  if (!user) return;
+  document.getElementById('nav-username').textContent = user.username;
+  loadRec();
+}
+
+function switchAlgo(el) {
+  document.querySelectorAll('.algo-tab').forEach(t => t.classList.remove('active'));
+  el.classList.add('active');
+  currentAlgo = el.dataset.algo;
+  loadRec();
+}
+
+async function loadRec() {
+  const grid = document.getElementById('rec-grid');
+  grid.innerHTML = '<div class="loading"><div class="spinner"></div></div>';
+  const res = await API.get(`/api/user/recommend?algo=${currentAlgo}&top_n=12`);
+  grid.innerHTML = res.code === 200 && res.data.length
+    ? res.data.map(movieCardHTML).join('')
+    : '<div class="empty"><div class="empty-icon">🎬</div>暂无推荐，先去评分几部电影吧</div>';
+}
+
+async function loadEval() {
+  document.getElementById('eval-result').innerHTML = '<div class="loading"><div class="spinner"></div> 评估中，请稍候...</div>';
+  const res = await API.get('/api/user/evaluate');
+  if (res.code !== 200) return;
+  const d = res.data;
+  const rows = Object.entries(d).map(([algo, v]) => `
+    <tr>
+      <td>${algo}</td>
+      <td>${v.precision}</td>
+      <td>${v.sample_count}</td>
+    </tr>`).join('');
+  document.getElementById('eval-result').innerHTML = `
+    <table class="eval-table">
+      <thead><tr><th>算法</th><th>精确率 (Precision)</th><th>样本数</th></tr></thead>
+      <tbody>${rows}</tbody>
+    </table>`;
+}
+init();
+</script>
+</body>
+</html>
