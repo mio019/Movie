@@ -38,6 +38,7 @@
   <a href="/">首页</a>
   <a href="/movies">电影</a>
   <a href="/recommend">推荐</a>
+  <a href="/favorites">收藏</a>
   <div class="nav-user">
     <span id="nav-username"></span>
     <span class="logout-btn" onclick="logout()">退出</span>
@@ -117,7 +118,7 @@ async function init() {
 
     <div style="font-size:13px;letter-spacing:3px;color:var(--text2);
                 margin-bottom:20px;display:flex;align-items:center;gap:12px">
-      评论区
+      评价与评分
       <span style="flex:1;height:1px;background:var(--border);display:block"></span>
     </div>
     <div style="margin-bottom:24px">
@@ -128,13 +129,25 @@ async function init() {
       </button>
     </div>
     <div id="comment-list">
-      ${m.comments.length ? m.comments.map(c => `
-        <div class="comment-item">
-          <div class="comment-user">用户 ${c.user_id}</div>
-          <div class="comment-text">${c.content}</div>
-          <div class="comment-time">${c.time}</div>
-        </div>`).join('')
-      : '<div class="empty">暂无评论，来发表第一条吧</div>'}
+      ${m.activities && m.activities.length ? m.activities.map(a => {
+        if (a.type === 'rating') {
+          const stars = '★'.repeat(Math.round(a.rating)) + '☆'.repeat(5 - Math.round(a.rating));
+          return `
+            <div class="comment-item">
+              <div class="comment-user">${a.username} <span style="color:var(--accent);font-size:12px">${stars} ${a.rating}分</span></div>
+              <div class="comment-text">${a.content || ''}</div>
+              <div class="comment-time">${a.time}</div>
+            </div>`;
+        } else {
+          return `
+            <div class="comment-item">
+              <div class="comment-user">${a.username}</div>
+              <div class="comment-text">${a.content}</div>
+              <div class="comment-time">${a.time}</div>
+            </div>`;
+        }
+      }).join('')
+      : '<div class="empty">暂无评价，来发表第一条吧</div>'}
     </div>
   `;
 

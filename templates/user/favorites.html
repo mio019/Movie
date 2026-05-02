@@ -1,0 +1,130 @@
+<!DOCTYPE html>
+<html lang="zh">
+<head>
+  <meta charset="UTF-8">
+  <title>收藏夹 · CineRec</title>
+  <link rel="stylesheet" href="/static/css/main.css">
+  <style>
+    .fav-header {
+      display: flex; align-items: center; justify-content: space-between;
+      margin-bottom: 32px;
+    }
+    .fav-header h2 {
+      font-family: 'Cinzel', serif; font-size: 28px;
+      color: var(--accent); margin: 0;
+    }
+    .fav-count { font-size: 13px; color: var(--text2); }
+    .fav-card {
+      position: relative;
+    }
+    .fav-card .remove-btn {
+      position: absolute; top: 8px; right: 8px;
+      width: 28px; height: 28px; border-radius: 50%;
+      background: rgba(0,0,0,.6); color: #fff;
+      border: none; cursor: pointer; font-size: 16px;
+      display: none; align-items: center; justify-content: center;
+      z-index: 2; transition: .2s;
+    }
+    .fav-card:hover .remove-btn { display: flex; }
+    .fav-card .remove-btn:hover { background: #c0392b; }
+  </style>
+</head>
+<body>
+<nav class="nav">
+  <div class="nav-brand">CINEREC</div>
+  <a href="/">首页</a>
+  <a href="/movies">电影</a>
+  <a href="/recommend">推荐</a>
+  <a href="/favorites" class="active">收藏</a>
+  <div class="nav-user">
+    <span id="nav-username"></span>
+    <span class="logout-btn" onclick="logout()">退出</span>
+  </div>
+</nav>
+
+<div class="main">
+  <div class="container" style="padding-bottom:60px">
+    <div class="fav-header">
+      <h2>我的收藏</h2>
+      <span class="fav-count" id="fav-count"></span>
+    </div>
+    <div id="fav-grid" class="grid-movies">
+      <div class="loading"><div class="spinner"></div></div>
+    </div>
+  </div>
+</div>
+
+<script src="/static/js/main.js"></script>
+<script>
+let favorites = [];
+
+async function init() {
+  const profile = await checkLogin();
+  if (!profile) return;
+  document.getElementById('nav-username').textContent = profile.username;
+
+  await loadFavorites();
+}
+
+async function loadFavorites() {
+  const res = await API.get('/api/user/favorites');
+  if (res.code !== 200) return;
+  favorites = res.data;
+  document.getElementById('fav-count').textContent = `共 ${favorites.length} 部`;
+
+  const grid = document.getElementById('fav-grid');
+  if (!favorites.length) {
+    grid.innerHTML = `
+      <div class="empty" style="grid-column:1/-1">
+        <div class="empty-icon">♥</div>
+        <div>还没有收藏电影</div>
+        <a href="/movies" style="color:var(--accent);margin-top:12px;display:inline-block">去发现好电影 →</a>
+      </div>`;
+    return;
+  }
+
+  grid.innerHTML = favorites.map(m => {
+    const poster = m.poster_url
+      ? `<img src="${m.poster_url}" alt="${m.title}"
+              style="width:100%;height:100%;object-fit:cover;display:block"
+              onerror="this.style.display='none'">`
+      : '<span style="font-size:48px">🎬</span>';
+    return `
+    <div class="movie-card fav-card fade-in" id="fav-${m.movie_id}">
+      <button class="remove-btn" onclick="event.stopPropagation();removeFav(${m.movie_id})" title="取消收藏">×</button>
+      <div class="movie-poster" onclick="location.href='/movie/${m.movie_id}'">
+        ${poster}
+      </div>
+      <div class="movie-info" onclick="location.href='/movie/${m.movie_id}'">
+        <div class="movie-title">${m.title}</div>
+        <div class="movie-meta">
+          <span class="movie-rating">★ ${m.avg_rating || '暂无'}</span>
+          <span style="margin-left:8px;color:var(--text2)">${m.year || ''}</span>
+        </div>
+        <div style="margin-top:6px">
+          ${(m.genres || '').split('|').slice(0,3).map(g =>
+            `<span class="badge badge-genre">${g}</span>`
+          ).join(' ')}
+        </div>
+      </div>
+    </div>`;
+  }).join('');
+}
+
+async function removeFav(movieId) {
+  const res = await API.delete(`/api/user/favorite/${movieId}`);
+  if (res.code === 200) {
+    toast('已取消收藏');
+    document.getElementById(`fav-${movieId}`)?.remove();
+    favorites = favorites.filter(f => f.movie_id !== movieId);
+    document.getElementById('fav-count').textContent = `共 ${favorites.length} 部`;
+    if (!favorites.length) loadFavorites(); // 刷新显示空状态
+  } else {
+    toast(res.msg, 'error');
+  }
+}
+
+init();
+</script>
+</body>
+</html>

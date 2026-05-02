@@ -204,6 +204,7 @@ def get_favorites():
                 'genres':      m.genres,
                 'avg_rating':  m.avg_rating,
                 'year':        m.year,
+                'poster_url':  m.poster_url or '',
             })
     return success(data)
 

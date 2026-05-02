@@ -31,6 +31,10 @@ def profile_page():
 def recommend_page():
     return render_template('user/recommend.html')
 
+@page_bp.route('/favorites')
+def favorites_page():
+    return render_template('user/favorites.html')
+
 @page_bp.route('/admin')
 def admin_index():
     return render_template('admin/dashboard.html')

@@ -1,5 +1,5 @@
 from flask import Blueprint, request
-from models.tables import Movie, Comment, Rating
+from models.tables import Movie, Comment, Rating, User
 from models import db
 from utils import success, fail
 
@@ -45,6 +45,7 @@ def movie_detail(movie_id):
     m = Movie.query.get(movie_id)
     if not m:
         return fail('电影不存在', 404)
+    # 文字评论
     comments = Comment.query.filter_by(
         movie_id=movie_id, is_visible=True)\
         .order_by(Comment.created_at.desc()).limit(20).all()
@@ -54,6 +55,43 @@ def movie_detail(movie_id):
         'content':    c.content,
         'time':       c.created_at.strftime('%Y-%m-%d %H:%M'),
     } for c in comments]
+    # 最近评分（带用户名）
+    recent_ratings = db.session.query(Rating, User.username)\
+        .join(User, Rating.user_id == User.id)\
+        .filter(Rating.movie_id == movie_id)\
+        .order_by(Rating.timestamp.desc()).limit(50).all()
+    # 合并为统一活动列表
+    activities = []
+    for c in comments:
+        u = User.query.get(c.user_id)
+        activities.append({
+            'type':    'comment',
+            'user_id': c.user_id,
+            'username': u.username if u else f'user_{c.user_id}',
+            'content': c.content,
+            'time':    c.created_at.strftime('%Y-%m-%d %H:%M'),
+        })
+    _rating_words = {
+        5: ['非常喜欢这部电影！', '经典之作，强烈推荐！', '太棒了，看了好几遍', '完美的电影，无可挑剔', '最爱之一，每次看都有新感受'],
+        4: ['很不错，值得一看', '挺好看的，推荐给大家', '好看的电影，演技在线', '不错，剧情和制作都很好', '值得花时间看的一部'],
+        3: ['还行吧，中规中矩', '一般般，凑合能看', '不算差也不算好', '可以一看，没什么惊喜', '普通水平，打发时间还行'],
+        2: ['不太好看，有点失望', '感觉一般，不推荐', '勉强看完，没什么亮点', '不太对我的口味', '期望过高了，有点后悔'],
+        1: ['不太合口味，很难看下去', '不推荐，浪费了时间', '真的很一般，不建议看', '不喜欢，完全看不进去', '太差了，不建议观看'],
+    }
+    for r, username in recent_ratings:
+        words = _rating_words.get(int(round(r.rating)), _rating_words[3])
+        idx = (r.user_id * 7 + r.movie_id * 3) % len(words)
+        activities.append({
+            'type':     'rating',
+            'user_id':  r.user_id,
+            'username': username,
+            'rating':   r.rating,
+            'content':  words[idx],
+            'time':     r.timestamp.strftime('%Y-%m-%d %H:%M'),
+        })
+    activities.sort(key=lambda x: x['time'], reverse=True)
+    activities = activities[:50]
+
     return success({
         'movie_id':     m.id,
         'title':        m.title,
@@ -65,6 +103,7 @@ def movie_detail(movie_id):
         'avg_rating':   m.avg_rating,
         'rating_count': m.rating_count,
         'comments':     comment_list,
+        'activities':   activities,
     })
 
 
